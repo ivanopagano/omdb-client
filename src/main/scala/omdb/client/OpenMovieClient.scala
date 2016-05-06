@@ -43,15 +43,20 @@ class OpenMovieClientDef extends OpenMovieClient with SprayJsonSupport {
     //search results in the future
     val outcome: Future[MovieSearchList] = searchPipeline(Get(s"http://www.omdbapi.com/?s=$title&r=json"))
 
-    val results: Future[Seq[OpenMovieDef]] = outcome flatMap { searchList =>
-      Future.sequence(searchList.Search map {
-        entry => moviePipeline(Get(s"http://www.omdbapi.com/?i=${entry.imdbID}&plot=full&r=json"))
-      })
-    }
+    //support functions
+    val entryToMovie: MovieSearchEntry => Future[OpenMovieDef] = (entry: MovieSearchEntry) => moviePipeline(Get(s"http://www.omdbapi.com/?i=${entry.imdbID}&plot=full&r=json"))
+    val entriesToMovie: Seq[MovieSearchEntry] => Future[Seq[OpenMovieDef]] = (entrySeq: Seq[MovieSearchEntry]) => Future.traverse(entrySeq)(entryToMovie)
+
+    //compose operations on futures
+    val results: Future[Seq[OpenMovieDef]] = for {
+      MovieSearchList(entries) <- outcome
+      movies <- entriesToMovie(entries)
+    } yield movies
 
     //handle failure
     val safeResults = results.recover {case _:PipelineException => Seq.empty[OpenMovie]}
 
+    //wait for the result
     Await.result(safeResults, 5 seconds).toArray
 
   }
