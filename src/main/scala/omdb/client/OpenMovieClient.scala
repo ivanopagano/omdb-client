@@ -1,8 +1,8 @@
 package omdb.client
 
-import omdb.client.api.OpenMovie
+import omdb.client.api._
 
-case class OpenMovie(
+case class OpenMovieDef(
   title: String,
   year: String,
   rated: String,
@@ -18,9 +18,9 @@ case class OpenMovie(
   awards: String,
   poster: String,
   `type`: String
-) extends omdb.client.api.OpenMovie
+) extends OpenMovie
 
-class OpenMovieClient extends api.OpenMovieClient {
+class OpenMovieClientDef extends OpenMovieClient {
   override def listMoviesWithTitleLike(title: String): Array[OpenMovie] = ???
 }
 
