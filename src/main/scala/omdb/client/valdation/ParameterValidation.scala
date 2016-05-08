@@ -1,5 +1,7 @@
 package omdb.client.valdation
 
+import scala.util.Try
+
 /**
   * Creare un sistema di validazione dei parametri di configurazione del servizio
   * - protocollo
@@ -19,31 +21,27 @@ trait ParameterValidation {
     protocol: String,
     host: String,
     params: Map[String, String] = Map.empty,
-    queryParam: String): Option[ValidEndpoint] = {
+    queryParam: String): Try[ValidEndpoint] = {
 
-    def asOption[A](predicate: A => Boolean): A => Option[A] = a =>
-      if (predicate(a)) Some(a) else None
-
-    val validProtocol = (protocol: String) => "^http(s?)$".r findFirstIn protocol
-    val validHost = (host: String) => """(\w+\.){2,}\w+(:\d+)?/?$""".r findFirstIn host
-    val paramPredicate = (param: String) => param.nonEmpty && param.forall(_.isLetterOrDigit)
-    val paramMapPredicate = (paramMap: Map[String, String]) => paramMap forall {
-      case (key, value) => paramPredicate(key) & paramPredicate(value)
+    val validProtocol = (protocol: String) => ("^http(s?)$".r findFirstIn protocol).isDefined
+    val validHost = (host: String) => ("""(\w+\.){2,}\w+(:\d+)?/?$""".r findFirstIn host).isDefined
+    val validParam = (param: String) => param.nonEmpty && param.forall(_.isLetterOrDigit)
+    val validParamMap = (paramMap: Map[String, String]) => paramMap forall {
+      case (key, value) => validParam(key) && validParam(value)
     }
-    val validParam = asOption(paramPredicate)
-    val validParamMap = asOption(paramMapPredicate)
 
     def concatParams(pm: Map[String, String]): String =
       pm.map {
         case (key, value) => key + "=" + value
       }.mkString("&")
 
-    for {
-      pr <- validProtocol(protocol)
-      hs <- validHost(host)
-      ps <- validParamMap(params)
-      qp <- validParam(queryParam)
-    } yield ValidEndpoint(pr + "://" + hs, concatParams(params), qp)
+    Try {
+      assume(validProtocol(protocol), s"$protocol is not a valid protocol")
+      assume(validHost(host), s"$host is not a valid host")
+      assume(validParamMap(params), s"$params contains one or more invalid tokens")
+      assume(validParam(queryParam), s"$queryParam is not a valid query parameter")
+      ValidEndpoint(protocol + "://" + host, concatParams(params), queryParam)
+    }
 
   }
 

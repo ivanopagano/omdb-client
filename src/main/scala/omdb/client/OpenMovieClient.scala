@@ -5,7 +5,7 @@ import omdb.client.api._
 import omdb.client.valdation.{ParameterValidation, ValidEndpoint}
 import spray.httpx.SprayJsonSupport
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionException, Future}
 import scala.language.postfixOps
 
 case class OpenMovieDef(
@@ -40,11 +40,6 @@ class OpenMovieClientDef(
   private val titleEndPoint = validate(remoteProtocol, remoteHost, queryConfiguration, byTitleParam)
   private val movieEndPoint = validate(remoteProtocol, remoteHost, queryConfiguration, byIdParam)
 
-  private def asyncEndPoint(validEndpoint: Option[ValidEndpoint]): Future[ValidEndpoint] = validEndpoint match {
-    case None => Future.failed(new IllegalArgumentException("Configuration parameters for the Movie Client are not valid"))
-    case Some(endpoint) => Future.successful(endpoint)
-  }
-
   override def listMoviesWithTitleLike(title: String): Array[OpenMovie] = {
     import MovieProtocol._
     import scala.concurrent.Await
@@ -61,16 +56,18 @@ class OpenMovieClientDef(
 
     //compose operations on futures
     val results: Future[Seq[OpenMovieDef]] = for {
-      searchUrl <- asyncEndPoint(titleEndPoint)
+      searchUrl <- Future fromTry titleEndPoint
       MovieSearchList(entries) <- searchPipeline(Get(searchUrl buildQueryUrl encodedTitle))
-      detailUrl <- asyncEndPoint(movieEndPoint)
+      detailUrl <- Future fromTry movieEndPoint
       entryToMovie = (entry: MovieSearchEntry) => moviePipeline(Get(detailUrl buildQueryUrl entry.imdbID))
       entriesToMovie = (entrySeq: Seq[MovieSearchEntry]) => Future.traverse(entrySeq)(entryToMovie)
       movies <- entriesToMovie(entries)
     } yield movies
 
     //handle failure
-    val safeResults = results.recover { case _: PipelineException => Seq.empty[OpenMovie] }
+    val safeResults = results.recover {
+      case _: PipelineException | _: ExecutionException => Seq.empty[OpenMovie]
+    }
 
     //wait for the result
     Await.result(safeResults, 5 seconds).toArray
