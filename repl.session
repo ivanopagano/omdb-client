@@ -11,8 +11,7 @@ val search = searchPipeline(Get(s"http://www.omdbapi.com/?s=$searchFor&plot=full
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
-val result = Await.result(search, 1 second))
-val movies = result.Search
+val result = Await.result(search, 1 second)
 
 
 //protocol
@@ -28,11 +27,14 @@ object MovieProtocol extends DefaultJsonProtocol {
   implicit val searchFormat = jsonFormat1(MovieSearchList)
 }
 import MovieProtocol._
+//you can get away with the protocol using   "com.github.fommil" %% "spray-json-shapeless" % "1.2.0",
+//import fommil.sjs.FamilyFormats._
+
 val searchPipeline = sendReceive ~> unmarshal[MovieSearchList]
 // val moviePipeline = sendReceive ~> unmarshal[Movie]
 val searchFor = "the+matrix"
 val search = searchPipeline(Get(s"http://www.omdbapi.com/?s=$searchFor&plot=full&r=json"))
-val result = Await.result(search, 1 second))
+val result = Await.result(search, 1 second)
 val movies = result.Search
 
 movies.find(_.Title contains "Revolutions").map(_.Poster)
