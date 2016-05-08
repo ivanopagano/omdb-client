@@ -1,5 +1,6 @@
 package omdb.client
 
+import akka.actor.ActorSystem
 import org.scalatest._
 
 /** Defines a contract for the omdb client
@@ -7,7 +8,14 @@ import org.scalatest._
   */
 class ClientSpec extends FlatSpec with Matchers {
 
-  val client = new OpenMovieClientDef
+  implicit val system = ActorSystem()
+
+  val client = new OpenMovieClientDef(
+    remoteHost = "www.omdbapi.com",
+    queryConfiguration = Map("plot" -> "full", "r" -> "json"),
+    byTitleParam = "s",
+    byIdParam = "i"
+  )
 
   "A OpenMovieClient" should "fetch a list of movie entries when called with a valid title" in {
     val movies = client.listMoviesWithTitleLike("zoolander")

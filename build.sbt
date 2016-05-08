@@ -4,6 +4,8 @@ version := "0.0.1"
 
 scalaVersion := "2.11.8"
 
+scalacOptions += "-feature"
+
 resolvers += "spray repo" at "http://repo.spray.io"
 
 libraryDependencies ++= Seq(
