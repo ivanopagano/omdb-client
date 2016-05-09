@@ -1,5 +1,7 @@
 package omdb.client.api;
 
+import scala.concurrent.Future;
+
 /**
  * <h2>Obiettivo 1.</h2>
  * Implementare un client che accede alle API ReST disponibili al sito
@@ -15,5 +17,5 @@ public interface OpenMovieClient {
      * @param title il termine da cercare
      * @return l'elenco di oggetti con il dettaglio dei film trovati
      */
-    public OpenMovie[] listMoviesWithTitleLike(String title);
+    public Future<OpenMovie[]> listMoviesWithTitleLike(String title);
 }

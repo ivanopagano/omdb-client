@@ -48,7 +48,7 @@ class OpenMovieClientDef(
   private val titleEndPoint = validate(remoteProtocol, remoteHost, queryConfiguration, byTitleParam)
   private val movieEndPoint = validate(remoteProtocol, remoteHost, queryConfiguration, byIdParam)
 
-  override def listMoviesWithTitleLike(title: String): Array[OpenMovie] = {
+  override def listMoviesWithTitleLike(title: String): Future[Array[OpenMovie]] = {
     import java.net.URLEncoder.encode
 
     import MovieProtocol._
@@ -79,8 +79,8 @@ class OpenMovieClientDef(
       case _: PipelineException | _: ExecutionException => Seq.empty[OpenMovie]
     }
 
-    //wait for the result
-    Await.result(safeResults, 5 seconds).toArray
+    //return the async result
+    safeResults map (_.toArray)
 
   }
 }
