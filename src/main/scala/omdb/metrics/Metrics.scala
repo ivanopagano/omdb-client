@@ -1,7 +1,8 @@
 package omdb.metrics
 
+import scala.language.postfixOps
 import scala.compat.Platform.currentTime
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 
 /**
@@ -11,17 +12,15 @@ import scala.concurrent.duration._
   */
 object Metrics {
 
+  def async[A, B](op: A => B): A => Future[B] = op andThen Future.successful
+
   /**
     * measure execution time of a given function
     */
-  def measuringExecution[A, B](op: A => B, opName: String = "Operation"): A => B =
-    a => {
-      val start = currentTime
-      val b = op(a)
-      val lapse = currentTime - start
-      logTime(opName, lapse.milliseconds)
-      b
-    }
+  def measuringExecution[A, B](op: A => B, opName: String = "Operation"): A => B = {
+    import scala.concurrent.ExecutionContext.Implicits.global
+    measuringAsyncExecution(async(op), opName) andThen (Await.result(_, 0 seconds))
+  }
 
   /**
     * measure execution time of a given asynchronous function
