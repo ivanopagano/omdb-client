@@ -1,8 +1,11 @@
 package omdb.client
 
+import java.time.LocalDateTime
+
 import akka.actor.ActorSystem
 import omdb.client.api._
 import omdb.client.valdation.{ParameterValidation, ValidEndpoint}
+import spray.http.{CacheDirective, HttpRequest, HttpResponse}
 import spray.httpx.SprayJsonSupport
 
 import scala.concurrent.{ExecutionException, Future}
@@ -37,6 +40,11 @@ class OpenMovieClientDef(
   import spray.client.pipelining._
   import spray.httpx.PipelineException
 
+  import spray.http.CacheDirectives._
+  import spray.http.HttpHeaders.`Cache-Control`
+
+  private[this] var clientCache = Map.empty[HttpRequest, (HttpResponse, LocalDateTime)]
+
   private val titleEndPoint = validate(remoteProtocol, remoteHost, queryConfiguration, byTitleParam)
   private val movieEndPoint = validate(remoteProtocol, remoteHost, queryConfiguration, byIdParam)
 
@@ -49,8 +57,42 @@ class OpenMovieClientDef(
     //defines the concurrent execution context
     import system.dispatcher
 
-    val searchPipeline = sendReceive ~> unmarshal[MovieSearchList]
-    val moviePipeline = sendReceive ~> unmarshal[OpenMovieDef]
+    import LocalDateTime._
+
+    val caching = (rr: (HttpRequest, HttpResponse)) => {
+      val (req, res) = rr
+      Future {
+        val ageToExpiration: PartialFunction[CacheDirective, LocalDateTime] = {case `max-age`(deltaSeconds) => now plusSeconds deltaSeconds}
+        for {
+          `Cache-Control`(directives) <- res.header[`Cache-Control`]
+          _ <- directives.find(_ == public)
+          expire <- directives collectFirst ageToExpiration
+        } {
+          clientCache += (req -> (res, expire))
+        }
+      }
+      res
+    }
+
+    val packWithRequest = (pipeSend: HttpRequest => Future[HttpResponse]) => (req: HttpRequest) => pipeSend(req) map ((req, _))
+    val requestMemorySend: HttpRequest => Future[(HttpRequest, HttpResponse)] = req =>
+      clientCache.get(req) match {
+        case Some((response, expiring)) if expiring isAfter now => {
+          println(s"cache hit for ${req.uri}, valid until $expiring")
+          Future.successful((req, response))
+        }
+        case Some((response, expiring)) => {
+          println(s"cache stale for ${req.uri}, expired $expiring")
+          packWithRequest(sendReceive)(req)
+        }
+        case None => {
+          println(s"cache miss for ${req.uri}")
+          packWithRequest(sendReceive)(req)
+        }
+      }
+
+    val searchPipeline = requestMemorySend ~> caching ~> unmarshal[MovieSearchList]
+    val moviePipeline = requestMemorySend ~> caching ~> unmarshal[OpenMovieDef]
 
     val encodedTitle = encode(title, "UTF-8")
 
